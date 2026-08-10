@@ -181,5 +181,21 @@ def list_notes():
         cat_name = n.category.name if n.category else "Uncategorized"
         print(f"[{n.id}] {n.title}  —  category: {cat_name}  (created {n.created_at})")
 
-list_notes()  # temporary test call
+
+def search_notes():
+    keyword = input("Search keyword (in title): ").strip()
+
+    # SYNTAX: Note.title.contains(keyword) is SQLAlchemy expression syntax —
+    #         Python code that BUILDS a SQL WHERE clause, not a Python string check.
+    # FUNCTION: equivalent to SELECT * FROM notes WHERE title LIKE '%keyword%';
+    results = session.query(Note).filter(Note.title.contains(keyword)).all()
+
+    if not results:
+        print("No matches.")
+        return
+
+    for n in results:
+        print(f"[{n.id}] {n.title}")
+
+search_notes()  # temporary test call
 
