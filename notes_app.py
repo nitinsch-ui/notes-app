@@ -2,6 +2,11 @@
 # FUNCTION: these are the building blocks used to describe our tables as classes.
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey
 
+
+# SYNTAX: adding joinedload to the existing import list.
+# FUNCTION: this is the tool that prevents the N+1 problem below.
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker, joinedload
+
 # SYNTAX: importing from the .orm submodule specifically.
 # FUNCTION: declarative_base = parent class our tables inherit from;
 #           relationship = links two tables in Python; sessionmaker = builds
@@ -149,5 +154,32 @@ def add_note():
     session.commit()
     print("Note added.")
 
-add_note()  # temporary test call
+def list_notes():
+    # SYNTAX: method chaining — each .method() call returns an object you
+    #         can call another method on, building up one query step by step.
+    # FUNCTION: .options(joinedload(Note.category)) is the N+1 FIX — it
+    #           tells SQLAlchemy to fetch each note's Category in the SAME
+    #           query via a real SQL JOIN, instead of firing a separate
+    #           query per note later when .category gets touched (which is
+    #           exactly what would happen without this line).
+    #           .order_by(...desc()) sorts newest-first using created_at.
+    notes = (
+        session.query(Note)
+        .options(joinedload(Note.category))
+        .order_by(Note.created_at.desc())
+        .all()
+    )
+
+    if not notes:
+        print("No notes yet.")
+        return
+
+    for n in notes:
+        # SYNTAX: ternary expression — "value if condition else other_value".
+        # FUNCTION: n.category does NOT trigger a new query here — it's
+        #           already loaded thanks to joinedload above.
+        cat_name = n.category.name if n.category else "Uncategorized"
+        print(f"[{n.id}] {n.title}  —  category: {cat_name}  (created {n.created_at})")
+
+list_notes()  # temporary test call
 
