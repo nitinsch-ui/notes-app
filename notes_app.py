@@ -1,134 +1,79 @@
-# SYNTAX: import — pulls specific names out of the sqlalchemy package.
-# FUNCTION: these are the building blocks used to describe our tables as classes.
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey
-
-
 from sqlalchemy.exc import IntegrityError
-
-
-
-# SYNTAX: adding joinedload to the existing import list.
-# FUNCTION: this is the tool that prevents the N+1 problem below.
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker, joinedload
-
-# SYNTAX: importing from the .orm submodule specifically.
-# FUNCTION: declarative_base = parent class our tables inherit from;
-#           relationship = links two tables in Python; sessionmaker = builds
-#           our "connection to the database" object.
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker
-
-# SYNTAX: func lets us call real SQL functions (like NOW()) from Python.
-# FUNCTION: used below so the DATABASE stamps the creation time, not Python.
 from sqlalchemy.sql import func
 
-# SYNTAX: calling declarative_base() returns a class to inherit from.
-# FUNCTION: Base is the shared parent that makes SQLAlchemy treat Category
-#           and Note as real database tables, not just plain Python classes.
+# Declarative Base: standard SQLAlchemy setup. Every ORM model class inherits
+# from this Base so SQLAlchemy can track and map them to database tables.
 Base = declarative_base()
 
 
 class Category(Base):
-    # SYNTAX: __tablename__ is a special attribute SQLAlchemy looks for.
-    # FUNCTION: names the real SQL table "categories" — like CREATE TABLE categories.
     __tablename__ = 'categories'
 
-    # SYNTAX: Column(Integer, primary_key=True) declares a column and its type.
-    # FUNCTION: id uniquely identifies each category row; primary_key=True
-    #           makes the database auto-generate it and index it automatically.
+    # Primary key columns are auto-incrementing integers by default in SQLite.
     id = Column(Integer, primary_key=True)
-
-    # SYNTAX: String(50) = VARCHAR(50); unique=True adds a uniqueness constraint.
-    # FUNCTION: stores the category's actual name, e.g. "Work".
     name = Column(String(50), unique=True)
 
-    # SYNTAX: relationship() is NOT a real column — it's a Python-only link.
-    # FUNCTION: lets us write some_category.notes to get every Note pointing
-    #           back at this category, without writing SQL by hand.
+    # Relationship (Parent side): 'notes' is a Python attribute (not a DB column).
+    # back_populates links it to Note.category so both sides update dynamically.
     notes = relationship("Note", back_populates="category")
 
 
 class Note(Base):
-    # FUNCTION: represents the "many" side of the one-to-many relationship.
     __tablename__ = 'notes'
 
     id = Column(Integer, primary_key=True)
-
-    # SYNTAX: String has a length cap; Text does not.
-    # FUNCTION: title is short/searchable, content holds the full note body.
     title = Column(String(200))
     content = Column(Text)
 
-    # SYNTAX: ForeignKey('categories.id') creates a real enforced constraint.
-    # FUNCTION: THE actual foreign key column — this single value can only
-    #           point at ONE category, which is why it lives on notes and
-    #           not on categories (one category -> many notes).
+    # Foreign Key: actual column stored in the database pointing to categories.id.
     category_id = Column(Integer, ForeignKey('categories.id'))
 
-    # SYNTAX: server_default=func.now() — default value computed by the DB itself.
-    # FUNCTION: auto-timestamps every note on creation, used later for sorting newest-first.
+    # server_default=func.now() lets the SQL database set the timestamp upon insert,
+    # avoiding potential timezone mismatches from local Python time.
     created_at = Column(DateTime, server_default=func.now())
 
-    # SYNTAX: mirror relationship, pointing the other direction.
-    # FUNCTION: lets us write some_note.category — but note: the FIRST time
-    #           this is accessed without being pre-loaded, it silently fires
-    #           a new query (lazy loading) — the root cause of N+1 bugs later.
+    # Relationship (Child side): allows direct access to the linked Category object (e.g., note.category.name).
     category = relationship("Category", back_populates="notes")
 
 
-# SYNTAX: create_engine(url) returns an Engine — the core DB connection object.
-# FUNCTION: connects our code to a real notes.db file (created if missing).
+# Database Setup: create_engine defines connection details; create_all builds missing tables.
 engine = create_engine('sqlite:///notes.db', echo=False)
-
-# SYNTAX: Base.metadata.create_all(engine) is a method call against the
-#         metadata SQLAlchemy tracked from every class defined under Base.
-# FUNCTION: runs the equivalent of CREATE TABLE for both tables — safe to
-#           call every run, since it skips tables that already exist.
 Base.metadata.create_all(engine)
 
-# SYNTAX: sessionmaker(bind=engine) returns a class; calling it creates an instance.
-# FUNCTION: session is our "open conversation" with the database, used by
-#           every function we'll add in later commits.
+# Session Setup: sessionmaker manages database connections and transactions.
 Session = sessionmaker(bind=engine)
 session = Session()
 
 print("Models created, database connected successfully.")
 
+
 def add_category():
-    # SYNTAX: input() pauses and waits for typed text; .strip() trims whitespace.
-    # FUNCTION: gets the new category's name from the user.
+    """Prompts for a category name and saves it, handling duplicate name errors."""
     name = input("Category name: ").strip()
 
     if not name:
         print("Name can't be empty.")
         return
 
-    # SYNTAX: Category(name=name) constructs a Python object — nothing is
-    #         written to the database yet at this point.
-    # FUNCTION: builds the new row's data in memory only.
     category = Category(name=name)
-
-    # SYNTAX: session.add(obj) stages an object for insertion.
-    # FUNCTION: like running INSERT after BEGIN but before COMMIT — not
-    #           permanent yet.
     session.add(category)
 
-    # SYNTAX: session.commit() finalizes the transaction.
-    # FUNCTION: THIS is the moment the INSERT becomes permanent. If the
-    #           program crashed before this line, nothing would be saved —
-    #           that's atomicity.
+    # Unit of Work Pattern: session.add() stages changes; session.commit() flushes
+    # and executes the INSERT inside a single atomic transaction.
     try:
         session.commit()
         print(f"Added category: {name}")
     except IntegrityError:
-        session.rollback()  # Clears the failed transaction from memory
+        # If a DB constraint fails (e.g., duplicate unique name), rollback clears
+        # the pending failed changes so future session operations don't fail.
+        session.rollback()
         print(f"Category '{name}' already exists.")
 
 
 def add_note():
-    # SYNTAX: session.query(Category).all() builds and immediately executes
-    #         a query, returning a list of Category objects.
-    # FUNCTION: equivalent to SELECT * FROM categories; — shown so the user
-    #           can pick one to attach the new note to.
+    """Lists categories, gets user input, and links a new Note to the selected Category ID."""
     categories = session.query(Category).all()
 
     if not categories:
@@ -136,13 +81,9 @@ def add_note():
         return
 
     print("Existing categories:")
-    # SYNTAX: standard Python for-loop over the list returned above.
     for c in categories:
         print(f"  {c.id}: {c.name}")
 
-    # SYNTAX: try/except catches ValueError, which int() raises if the
-    #         string can't be converted to a number.
-    # FUNCTION: protects against bad input crashing the app.
     try:
         cat_id = int(input("Category id: "))
     except ValueError:
@@ -152,24 +93,17 @@ def add_note():
     title = input("Title: ").strip()
     content = input("Content: ").strip()
 
-    # SYNTAX: passing category_id=cat_id — storing the raw foreign key
-    #         value directly, not a Category object.
-    # FUNCTION: links this new note to the chosen category via its id —
-    #           the foreign key relationship in action.
     note = Note(title=title, content=content, category_id=cat_id)
     session.add(note)
     session.commit()
     print("Note added.")
 
+
 def list_notes():
-    # SYNTAX: method chaining — each .method() call returns an object you
-    #         can call another method on, building up one query step by step.
-    # FUNCTION: .options(joinedload(Note.category)) is the N+1 FIX — it
-    #           tells SQLAlchemy to fetch each note's Category in the SAME
-    #           query via a real SQL JOIN, instead of firing a separate
-    #           query per note later when .category gets touched (which is
-    #           exactly what would happen without this line).
-    #           .order_by(...desc()) sorts newest-first using created_at.
+    """Fetches notes sorted newest-first. Uses eager loading to prevent N+1 query overhead."""
+    # N+1 Optimization: joinedload performs an SQL JOIN under the hood to fetch Note
+    # and Category together in 1 query, rather than triggering 1 query for notes
+    # plus N extra queries every time note.category is accessed.
     notes = (
         session.query(Note)
         .options(joinedload(Note.category))
@@ -182,19 +116,15 @@ def list_notes():
         return
 
     for n in notes:
-        # SYNTAX: ternary expression — "value if condition else other_value".
-        # FUNCTION: n.category does NOT trigger a new query here — it's
-        #           already loaded thanks to joinedload above.
         cat_name = n.category.name if n.category else "Uncategorized"
         print(f"[{n.id}] {n.title}  —  category: {cat_name}  (created {n.created_at})")
 
 
 def search_notes():
+    """Performs a substring search against note titles using SQL LIKE."""
     keyword = input("Search keyword (in title): ").strip()
 
-    # SYNTAX: Note.title.contains(keyword) is SQLAlchemy expression syntax —
-    #         Python code that BUILDS a SQL WHERE clause, not a Python string check.
-    # FUNCTION: equivalent to SELECT * FROM notes WHERE title LIKE '%keyword%';
+    # Note.title.contains(k) translates to: WHERE notes.title LIKE '%k%'
     results = session.query(Note).filter(Note.title.contains(keyword)).all()
 
     if not results:
@@ -204,34 +134,29 @@ def search_notes():
     for n in results:
         print(f"[{n.id}] {n.title}")
 
+
 def delete_note():
+    """Look up a note by primary key ID and remove it."""
     try:
         note_id = int(input("Note id to delete: "))
     except ValueError:
         print("That's not a valid id.")
         return
 
-    # SYNTAX: session.get(Note, note_id) is a direct primary-key lookup;
-    #         returns the object, or None if nothing matches.
-    # FUNCTION: equivalent to SELECT * FROM notes WHERE id = ? LIMIT 1;
+    # session.get() is optimized for primary key lookups; returns None if missing.
     note = session.get(Note, note_id)
 
-    # SYNTAX: `is None` — correct way to check Python's "no value" sentinel.
-    # FUNCTION: confirms the note exists before trying to delete it.
     if note is None:
         print("No note with that id.")
         return
 
-    # SYNTAX: session.delete(obj) stages a deletion — same staging pattern as add().
-    # FUNCTION: nothing is actually removed until commit() runs next.
     session.delete(note)
     session.commit()
     print("Deleted.")
 
 
 def menu():
-    # SYNTAX: while True: — infinite loop, only exited by `break` below.
-    # FUNCTION: keeps the app running until the user chooses to quit.
+    """Main CLI loop for routing user operations."""
     while True:
         print("\n--- Notes App ---")
         print("1) Add category")
@@ -243,8 +168,6 @@ def menu():
 
         choice = input("> ").strip()
 
-        # SYNTAX: if/elif/else chain — checked top to bottom, first match wins.
-        # FUNCTION: routes the user's choice to the right function.
         if choice == "1":
             add_category()
         elif choice == "2":
@@ -261,9 +184,7 @@ def menu():
         else:
             print("Not a valid option, try again.")
 
-# SYNTAX: if __name__ == "__main__": only runs this block when the file is
-#         executed directly (python3 notes_app.py), not if imported elsewhere.
-# FUNCTION: the actual entry point — starts the app by calling menu().
+
+# Standard entry-point check: ensures main execution code only runs when executed directly.
 if __name__ == "__main__":
     menu()
-
