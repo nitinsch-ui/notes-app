@@ -112,9 +112,12 @@ def add_category():
     # FUNCTION: THIS is the moment the INSERT becomes permanent. If the
     #           program crashed before this line, nothing would be saved —
     #           that's atomicity.
-    session.commit()
-
-    print(f"Added category: {name}")
+    try:
+        session.commit()
+        print(f"Added category: {name}")
+    except IntegrityError:
+        session.rollback()  # Clears the failed transaction from memory
+        print(f"Category '{name}' already exists.")
 
 
 def add_note():
