@@ -3,6 +3,10 @@
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey
 
 
+from sqlalchemy.exc import IntegrityError
+
+
+
 # SYNTAX: adding joinedload to the existing import list.
 # FUNCTION: this is the tool that prevents the N+1 problem below.
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker, joinedload
