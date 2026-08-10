@@ -111,5 +111,43 @@ def add_category():
 
     print(f"Added category: {name}")
 
-add_category()  # temporary — just to test this one function works
+
+def add_note():
+    # SYNTAX: session.query(Category).all() builds and immediately executes
+    #         a query, returning a list of Category objects.
+    # FUNCTION: equivalent to SELECT * FROM categories; — shown so the user
+    #           can pick one to attach the new note to.
+    categories = session.query(Category).all()
+
+    if not categories:
+        print("No categories yet — add one first.")
+        return
+
+    print("Existing categories:")
+    # SYNTAX: standard Python for-loop over the list returned above.
+    for c in categories:
+        print(f"  {c.id}: {c.name}")
+
+    # SYNTAX: try/except catches ValueError, which int() raises if the
+    #         string can't be converted to a number.
+    # FUNCTION: protects against bad input crashing the app.
+    try:
+        cat_id = int(input("Category id: "))
+    except ValueError:
+        print("That's not a valid id.")
+        return
+
+    title = input("Title: ").strip()
+    content = input("Content: ").strip()
+
+    # SYNTAX: passing category_id=cat_id — storing the raw foreign key
+    #         value directly, not a Category object.
+    # FUNCTION: links this new note to the chosen category via its id —
+    #           the foreign key relationship in action.
+    note = Note(title=title, content=content, category_id=cat_id)
+    session.add(note)
+    session.commit()
+    print("Note added.")
+
+add_note()  # temporary test call
 
