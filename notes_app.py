@@ -84,3 +84,32 @@ session = Session()
 
 print("Models created, database connected successfully.")
 
+def add_category():
+    # SYNTAX: input() pauses and waits for typed text; .strip() trims whitespace.
+    # FUNCTION: gets the new category's name from the user.
+    name = input("Category name: ").strip()
+
+    if not name:
+        print("Name can't be empty.")
+        return
+
+    # SYNTAX: Category(name=name) constructs a Python object — nothing is
+    #         written to the database yet at this point.
+    # FUNCTION: builds the new row's data in memory only.
+    category = Category(name=name)
+
+    # SYNTAX: session.add(obj) stages an object for insertion.
+    # FUNCTION: like running INSERT after BEGIN but before COMMIT — not
+    #           permanent yet.
+    session.add(category)
+
+    # SYNTAX: session.commit() finalizes the transaction.
+    # FUNCTION: THIS is the moment the INSERT becomes permanent. If the
+    #           program crashed before this line, nothing would be saved —
+    #           that's atomicity.
+    session.commit()
+
+    print(f"Added category: {name}")
+
+add_category()  # temporary — just to test this one function works
+
