@@ -221,5 +221,42 @@ def delete_note():
     session.commit()
     print("Deleted.")
 
-delete_note()  # temporary test call
+
+def menu():
+    # SYNTAX: while True: — infinite loop, only exited by `break` below.
+    # FUNCTION: keeps the app running until the user chooses to quit.
+    while True:
+        print("\n--- Notes App ---")
+        print("1) Add category")
+        print("2) Add note")
+        print("3) List notes (newest first)")
+        print("4) Search notes by title")
+        print("5) Delete note")
+        print("6) Quit")
+
+        choice = input("> ").strip()
+
+        # SYNTAX: if/elif/else chain — checked top to bottom, first match wins.
+        # FUNCTION: routes the user's choice to the right function.
+        if choice == "1":
+            add_category()
+        elif choice == "2":
+            add_note()
+        elif choice == "3":
+            list_notes()
+        elif choice == "4":
+            search_notes()
+        elif choice == "5":
+            delete_note()
+        elif choice == "6":
+            print("Bye!")
+            break
+        else:
+            print("Not a valid option, try again.")
+
+# SYNTAX: if __name__ == "__main__": only runs this block when the file is
+#         executed directly (python3 notes_app.py), not if imported elsewhere.
+# FUNCTION: the actual entry point — starts the app by calling menu().
+if __name__ == "__main__":
+    menu()
 
