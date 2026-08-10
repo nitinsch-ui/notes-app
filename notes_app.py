@@ -197,5 +197,29 @@ def search_notes():
     for n in results:
         print(f"[{n.id}] {n.title}")
 
-search_notes()  # temporary test call
+def delete_note():
+    try:
+        note_id = int(input("Note id to delete: "))
+    except ValueError:
+        print("That's not a valid id.")
+        return
+
+    # SYNTAX: session.get(Note, note_id) is a direct primary-key lookup;
+    #         returns the object, or None if nothing matches.
+    # FUNCTION: equivalent to SELECT * FROM notes WHERE id = ? LIMIT 1;
+    note = session.get(Note, note_id)
+
+    # SYNTAX: `is None` — correct way to check Python's "no value" sentinel.
+    # FUNCTION: confirms the note exists before trying to delete it.
+    if note is None:
+        print("No note with that id.")
+        return
+
+    # SYNTAX: session.delete(obj) stages a deletion — same staging pattern as add().
+    # FUNCTION: nothing is actually removed until commit() runs next.
+    session.delete(note)
+    session.commit()
+    print("Deleted.")
+
+delete_note()  # temporary test call
 
